@@ -7,9 +7,7 @@ This repository provides:
 * Necessary scripts to train the generator and the state-of-the-art model CTGAN using [SDV](https://github.com/sdv-dev/SDV) package.
 * Pre-processed and ready-to-use datasets included.
 * Validation techniques: RF, SDV technique and utility validation (classification or survival analysis [Coxph](https://github.com/havakv/pycox)).
-* Pre-trained models to save you training time.
-  * SOTA can be found in the project
-  * Proposed approach can be found [here]()
+* Pre-trained models to save you training time for std and metabric (adult weighted too much to upload it to the repo).
 
 For more details, see full paper [TBC]().
 
