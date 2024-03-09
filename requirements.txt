@@ -1,0 +1,16 @@
+numpy
+pandas == 1.5.3
+colorama
+joblib
+sdv
+scipy
+scikit-learn==1.2.2
+torch
+torchtuples
+pycox
+statsmodels
+openpyxl
+tabulate
+seaborn
+
+
