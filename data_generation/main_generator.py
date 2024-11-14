@@ -151,7 +151,7 @@ def train(data_manager, params, seed, output_dir, args):
     n_gen = data[0].shape[0]
     model.train_latent_generator(data[0])
     model.generate(n_gen=n_gen)
-    model.validate_samples_range(data_manager, n_gen, params, seed)
+    model.validate_samples_range(data_manager, n_gen)
 
     # Save data generated as csv
     gen_data = data_manager.save_data_to_csv(output_dir, model_path, model.gen_info)
@@ -159,7 +159,7 @@ def train(data_manager, params, seed, output_dir, args):
     # Gaussian generation too and compare latent spaces
     if args['gauss']:
         model.generate_gauss(n_gen=n_gen)
-        model.validate_samples_range(data_manager, n_gen, params, seed, gauss=True)
+        model.validate_samples_range(data_manager, n_gen, gauss=True)
 
         # Plot latent spaces
         model.compare_latent_spaces(data[0], output_dir + 'gauss' + os.sep + model_path + os.sep)
@@ -173,7 +173,6 @@ def evaluate(data_manager, params, seed, args, model='bgm'):
     # Load already preprocessed data
     p_name = str(params['latent_dim']) + '_' + str(params['hidden_size'])
     imp_real_df = data_manager.model_data[0]
-    real_mask = data_manager.model_data[1]
     comp_gen_df = data_manager.gen_info[p_name][seed]['cov_samples'] if model == 'bgm' else \
         data_manager.gauss_gen_info[p_name][seed]['cov_samples']
 
@@ -301,6 +300,9 @@ def main():
                 # CTGAN/TVAE score representation
                 print('\n----CTGAN/TVAE SCORE----')
                 show_sdv_best_reports(results, best_rf_results, mode)
+
+
+
 
 
 # Press the green button in the gutter to run the script.

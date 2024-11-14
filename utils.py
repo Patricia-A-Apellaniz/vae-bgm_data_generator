@@ -97,8 +97,8 @@ def run_args():
     args['gauss'] = True
 
     # VAE hyperparameters
-    args['n_threads'] = 3
-    args['n_seeds'] = 3
+    args['n_threads'] = 15
+    args['n_seeds'] = 15
     args['param_comb'] = [{'hidden_size': 50, 'latent_dim': 5}]
 
     # Generation parameters

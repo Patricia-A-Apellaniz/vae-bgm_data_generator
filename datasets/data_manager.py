@@ -251,7 +251,7 @@ class DataManager:
             else:
                 self.gauss_gen_raw_data[p_name][res[1]] = res[6]
 
-    def postprocess_gen_data(self, gen_info, params, seed):
+    def postprocess_gen_data(self, gen_info):
         # Denormalize generated samples to check data ranges
         cov_samples = gen_info['cov_samples']
         denorm_gen_df = self.transform_data(cov_samples, denorm=True)

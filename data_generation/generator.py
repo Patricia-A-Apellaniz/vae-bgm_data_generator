@@ -108,23 +108,23 @@ class Generator(VariationalAutoencoder):
         check_nan_inf(z, 'Gauss latent space')
         self.sample_space(z, mu_sample, log_var_sample, 'gauss')
 
-    def validate_samples_range(self, data_manager, n_gen, params, seed, gauss=False):
+    def validate_samples_range(self, data_manager, n_gen, gauss=False):
         if gauss:
             # Denormalize generated samples to check data ranges
-            self.gauss_gen_info = data_manager.postprocess_gen_data(self.gauss_gen_info, params, seed)
+            self.gauss_gen_info = data_manager.postprocess_gen_data(self.gauss_gen_info)
 
             # If number of gen samples is less than n_gen, repeat the process
             while self.gauss_gen_info['cov_samples'].shape[0] < n_gen:
                 self.generate_gauss(n_gen=n_gen - self.gauss_gen_info['cov_samples'].shape[0])
-                self.gauss_gen_info = data_manager.postprocess_gen_data(self.gauss_gen_info, params, seed)
+                self.gauss_gen_info = data_manager.postprocess_gen_data(self.gauss_gen_info)
         else:
             # Denormalize generated samples to check data ranges
-            self.gen_info = data_manager.postprocess_gen_data(self.gen_info, params, seed)
+            self.gen_info = data_manager.postprocess_gen_data(self.gen_info)
 
             # If number of gen samples is less than n_gen, repeat the process
             while self.gen_info['cov_samples'].shape[0] < n_gen:
                 self.generate(n_gen=n_gen - self.gen_info['cov_samples'].shape[0])
-                self.gen_info = data_manager.postprocess_gen_data(self.gen_info, params, seed)
+                self.gen_info = data_manager.postprocess_gen_data(self.gen_info)
 
     def compare_latent_spaces(self, data, path):
         import matplotlib.pyplot as plt

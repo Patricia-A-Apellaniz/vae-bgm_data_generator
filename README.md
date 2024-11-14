@@ -9,7 +9,7 @@ This repository provides:
 * Validation techniques: RF, SDV technique and utility validation (classification or survival analysis [Coxph](https://github.com/havakv/pycox)).
 * Pre-trained models to save you training time for std and metabric (adult weighted too much to upload it to the repo).
 
-For more details, see full paper [TBC]().
+For more details, see full paper [here](https://ieeexplore.ieee.org/document/10715230).
 
 
 <!-- GETTING STARTED -->
@@ -53,15 +53,15 @@ To train/test SOTA models and show results, run the following  (it is necessary 
 
 
 
-[//]: # (<!-- LICENSE -->)
+<!-- LICENSE -->
 
-[//]: # (## License)
+## License
 
-[//]: # ()
-[//]: # (Distributed under the XXX License. See `LICENSE.txt` for more information.)
 
-[//]: # ()
-[//]: # (<p align="right">&#40;<a href="#readme-top">back to top</a>&#41;</p>)
+Distributed under the MIT License. See `LICENSE` for more information.
+
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 

@@ -1,34 +1,40 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="pati@138.4.34.247:3334 password (3)" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="vae-bgm_kraken" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
     <option name="confirmBeforeUploading" value="false" />
     <serverData>
-      <paths name="kraken_data_gen">
+      <paths name="cr_savae_kraken">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
-      <paths name="pati@138.4.34.247:3334 password">
+      <paths name="data_generator_kraken">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
-      <paths name="pati@138.4.34.247:3334 password (2)">
+      <paths name="savae_kraken">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
-      <paths name="pati@138.4.34.247:3334 password (3)">
+      <paths name="vae-bgm_kraken">
         <serverdata>
           <mappings>
             <mapping deploy="/home/pati/projects/vae-bgm_data_generator" local="$PROJECT_DIR$" />
           </mappings>
+          <excludedPaths>
+            <excludedPath local="true" path="$PROJECT_DIR$/data_generation/output_generator" />
+            <excludedPath local="true" path="$PROJECT_DIR$/data_generation/output_sota" />
+            <excludedPath local="true" path="$PROJECT_DIR$/results" />
+            <excludedPath local="true" path="$PROJECT_DIR$/datasets/raw_data" />
+          </excludedPaths>
         </serverdata>
       </paths>
     </serverData>
