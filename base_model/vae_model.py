@@ -21,13 +21,29 @@ class VariationalAutoencoder(torch.nn.Module):
         self.latent_dim = params['latent_dim']
         self.hidden_size = params['hidden_size']
         self.early_stop = params['early_stop']
+        self.training_profile = params.get('training_profile', 'paper')
+        if self.training_profile not in {'paper', 'stable'}:
+            raise ValueError('training_profile must be paper or stable')
+        self.beta = float(params.get('beta', 1.0))
+        self.warmup_epochs = int(params.get('warmup_epochs', 0))
+        self.grad_clip_norm = params.get('grad_clip_norm')
+        self.logvar_bounds = params.get('logvar_bounds')
+        if self.beta < 0 or self.warmup_epochs < 0:
+            raise ValueError('beta and warmup_epochs must be non-negative')
+        if self.grad_clip_norm is not None and self.grad_clip_norm <= 0:
+            raise ValueError('grad_clip_norm must be positive')
+        if self.logvar_bounds is not None and self.logvar_bounds[0] >= self.logvar_bounds[1]:
+            raise ValueError('logvar_bounds must be increasing')
 
         # Standard VAE modules. Encoder and Latent Space
         self.latent_space = LatentSpaceGaussian(self.latent_dim)
         self.Encoder = Encoder(input_dim=self.input_dim, hidden_dim=self.hidden_size,
                                output_dim=self.latent_space.latent_params)
-        self.Decoder = Decoder(latent_dim=self.latent_dim, hidden_size=self.hidden_size,
-                               feat_dists=self.feat_distributions)
+        self.Decoder = Decoder(latent_dim=self.latent_dim,
+                               feat_dists=self.feat_distributions,
+                               hidden_size=params.get('decoder_hidden_size', self.hidden_size),
+                               dropout_p=params.get('dropout_p', 0.2),
+                               gaussian_std_mode=params.get('gaussian_std_mode', 'paper'))
 
         # Define losses
         self.rec_loss = LogLikelihoodLoss(self.feat_distributions)
@@ -38,6 +54,9 @@ class VariationalAutoencoder(torch.nn.Module):
     def forward(self, input_data):
         latent_output = self.Encoder(input_data)
         latent_params = self.latent_space.get_latent_params(latent_output)
+        if self.logvar_bounds is not None:
+            mu, log_var = latent_params
+            latent_params = mu, log_var.clamp(*self.logvar_bounds)
         z = self.latent_space.sample_latent(latent_params)  # Sample the latent space using the reparameterization trick
         check_nan_inf(z, 'Latent space')
         cov_params = self.Decoder(z)
@@ -52,7 +71,7 @@ class VariationalAutoencoder(torch.nn.Module):
         out['cov_samples'] = sample_from_dist(cov_params, self.feat_distributions)
         return out
 
-    def fit_epoch(self, data, optimizer, batch_size=64, device=torch.device('cpu')):
+    def fit_epoch(self, data, optimizer, batch_size=64, device=torch.device('cpu'), beta=1.0):
         epoch_results = {'loss_tr': 0.0, 'loss_va': 0.0, 'kl_tr': 0.0, 'kl_va': 0.0, 'll_cov_tr': 0.0, 'll_cov_va': 0.0}
         cov_train, mask_train, cov_val, mask_val = data
 
@@ -81,14 +100,20 @@ class VariationalAutoencoder(torch.nn.Module):
             optimizer.zero_grad()
             loss_kl = self.latent_space.kl_loss(latent_params)
             loss_cov = self.rec_loss(cov_params, cov_train_batch, mask_train_batch)
-            loss = loss_kl + loss_cov
+            loss = beta * loss_kl + loss_cov
             loss.backward()
+            if self.grad_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(self.parameters(), self.grad_clip_norm)
             optimizer.step()
 
             # Save data
-            epoch_results['loss_tr'] += loss.item()
-            epoch_results['kl_tr'] += loss_kl.item()
-            epoch_results['ll_cov_tr'] += loss_cov.item()
+            weight = len(cov_train_batch) / len(cov_train) if self.training_profile == 'stable' else 1.0
+            epoch_results['loss_tr'] += loss.item() * weight
+            epoch_results['kl_tr'] += loss_kl.item() * weight
+            epoch_results['ll_cov_tr'] += loss_cov.item() * weight
+
+            if self.training_profile == 'stable' and batch < n_batches - 1:
+                continue
 
             # Validation step
             self.eval()
@@ -98,7 +123,8 @@ class VariationalAutoencoder(torch.nn.Module):
                 cov_params = out['cov_params']
                 loss_kl = self.latent_space.kl_loss(latent_params)
                 loss_cov = self.rec_loss(cov_params, cov_val, mask_val)
-                loss = loss_kl + loss_cov
+                validation_beta = self.beta if self.training_profile == 'stable' else beta
+                loss = validation_beta * loss_kl + loss_cov
 
                 # Save data
                 epoch_results['loss_va'] += loss.item()
@@ -114,6 +140,10 @@ class VariationalAutoencoder(torch.nn.Module):
         training_stats = {'loss_tr': [], 'loss_va': [], 'kl_tr': [], 'kl_va': [], 'll_cov_tr': [], 'll_cov_va': []}
 
         optimizer = torch.optim.Adam(self.parameters(), lr=train_params['lr'])
+        best_loss = np.inf
+        best_state = None
+        if self.early_stop and self.training_profile == 'stable':
+            self.early_stopper = EarlyStopper(patience=30, min_delta=1e-3)
 
         for epoch in range(train_params['n_epochs']):
             # Configure input data and missing data mask
@@ -123,7 +153,12 @@ class VariationalAutoencoder(torch.nn.Module):
             ep_data = np.array(x_train), np.array(mask_train), np.array(x_val), np.array(mask_val)
 
             epoch_results = self.fit_epoch(ep_data, optimizer, batch_size=train_params['batch_size'],
-                                           device=train_params['device'])
+                                           device=train_params['device'],
+                                           beta=self.beta * min(1.0, (epoch + 1) / max(1, self.warmup_epochs)))
+
+            if self.training_profile == 'stable' and epoch_results['loss_va'] < best_loss:
+                best_loss = epoch_results['loss_va']
+                best_state = {key: value.detach().clone() for key, value in self.state_dict().items()}
 
             for key in epoch_results.keys():
                 training_stats[key].append(epoch_results[key])
@@ -141,6 +176,9 @@ class VariationalAutoencoder(torch.nn.Module):
                 print('EARLY STOP')
                 break
 
+        if best_state is not None:
+            self.load_state_dict(best_state)
+        self.eval()
         return training_stats
 
     def save(self, path):

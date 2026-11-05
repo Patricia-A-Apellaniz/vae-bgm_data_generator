@@ -9,6 +9,7 @@ import pandas as pd
 
 from .data_manager import DataManager
 from sdv.datasets.demo import download_demo
+from sdv.metadata import SingleTableMetadata
 
 
 # Convert continuous variables to categorical, zero is a class and the rest of the elements are divided into 3
@@ -55,6 +56,8 @@ def preprocess_adult(dataset_name):
     raw_df = raw_df.drop(labels=['education-num'], axis=1)
 
     # Remove columns also in metadata
+    if not isinstance(metadata, SingleTableMetadata):
+        metadata = SingleTableMetadata.load_from_dict(metadata.to_dict()['tables'][dataset_name])
     metadata_cols = metadata.columns
     del metadata_cols['education-num']
     metadata.columns = metadata_cols.copy()

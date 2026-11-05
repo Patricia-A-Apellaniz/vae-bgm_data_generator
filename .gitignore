@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+experiments/
+external_output/
+data_generation/output_generator_runs/
+data_generation/output_sota_runs/

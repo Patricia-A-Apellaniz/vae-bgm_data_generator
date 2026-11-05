@@ -58,20 +58,25 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dim, feat_dists, max_k=10000.0, dropout_p=0.2, hidden_size=50):
+    def __init__(self, latent_dim, feat_dists, max_k=10000.0, dropout_p=0.2, hidden_size=50,
+                 gaussian_std_mode='paper'):
         super(Decoder, self).__init__()
         self.feat_dists = feat_dists
         self.out_dim = get_dim_from_type(self.feat_dists)
         self.dec1 = nn.Linear(in_features=latent_dim, out_features=hidden_size)
         self.dec2 = nn.Linear(in_features=hidden_size, out_features=self.out_dim)
         self.max_k = max_k
+        if gaussian_std_mode not in {'paper', 'softplus'}:
+            raise ValueError('gaussian_std_mode must be paper or softplus')
+        self.gaussian_std_mode = gaussian_std_mode
         self.dropout = nn.Dropout(dropout_p)
 
     def forward(self, z):
         x = F.relu(self.dec1(z))
         x = self.dropout(x)
         x = self.dec2(x)
-        x = get_activations_from_types(x, self.feat_dists, max_k=self.max_k)
+        x = get_activations_from_types(x, self.feat_dists, max_k=self.max_k,
+                                       gaussian_std_mode=self.gaussian_std_mode)
         return x
 
 

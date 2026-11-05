@@ -42,7 +42,8 @@ def get_dim_from_type(feat_dists):
     # to base_model the distributions in feat_dists
 
 
-def get_activations_from_types(x, feat_dists, min_val=1e-3, max_std=10.0, max_alpha=2, max_k=1000.0):
+def get_activations_from_types(x, feat_dists, min_val=1e-3, max_std=10.0, max_alpha=2, max_k=1000.0,
+                               gaussian_std_mode='paper'):
     # Ancillary function that gives the correct torch activations for each data distribution type
     # Example of type list: [('bernoulli', 1), ('gaussian', 2), ('categorical', 5)]
     # (distribution, number of parameters needed for it)
@@ -52,7 +53,11 @@ def get_activations_from_types(x, feat_dists, min_val=1e-3, max_std=10.0, max_al
         dist, num_params = type
         if dist == 'gaussian':
             out.append(x[:, index_x, np.newaxis])  # Mean: from -inf to +inf
-            out.append((torch.sigmoid(x[:, index_x + 1, np.newaxis]) * (max_std - min_val) + min_val) / (10 * max_std))
+            raw_std = x[:, index_x + 1, np.newaxis]
+            if gaussian_std_mode == 'softplus':
+                out.append((torch.nn.functional.softplus(raw_std) + 1e-2).clamp(max=2.0))
+            else:
+                out.append((torch.sigmoid(raw_std) * (max_std - min_val) + min_val) / (10 * max_std))
         elif dist == 'bernoulli':
             out.append(torch.sigmoid(x[:, index_x, np.newaxis]) * (1.0 - 2 * min_val) + min_val)
             # p: (min_val, 1-min_val)

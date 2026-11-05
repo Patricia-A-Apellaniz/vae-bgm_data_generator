@@ -2,7 +2,6 @@
 # Email: patricia.alonsod@upm.es
 # Date: 20/12/2023
 
-
 # Packages to import
 import os
 import sys
@@ -13,26 +12,26 @@ sys.path.append(parent_dir)
 from colorama import Fore, Style
 from sdv.single_table import CTGANSynthesizer
 from utils import run_args, create_output_dir, check_file, save
-from validation import discriminative_validation, utility_validation, ctgan_score_validation
+from validation import discriminative_validation, utility_validation, ctgan_score_validation, maximum_mean_discrepancy, \
+    bootstrap_mmd
 
 
 # https://github.com/sdv-dev/CTGAN
 # Modeling Tabular data using Conditional GAN (https://arxiv.org/abs/1907.00503)
-def train(data_manager, output_dir, model_name):
+def train(data_manager, output_dir, model_name, n_epochs=1000):
     # Create a synthesizer
     if model_name == 'ctgan':
-        synthesizer = CTGANSynthesizer(data_manager.metadata, epochs=1000, cuda=False)
+        synthesizer = CTGANSynthesizer(data_manager.metadata, epochs=n_epochs, cuda=False)
+        # Train synthesizer
+        synthesizer.fit(data_manager.norm_df)
+        # Save synthesizer
+        synthesizer.save(output_dir + model_name + '_synthesizer.pkl')
+        # Generate samples (generate same amount of data as generator)
+        synthetic_df = synthesizer.sample(num_rows=data_manager.model_data[0].shape[0])
+        # Save dataframe
+        synthetic_df.to_csv(output_dir + 'gen_data.csv', index=False)
     else:
         raise RuntimeError('State-of-the-art model not recognized')
-
-    # Train synthesizer
-    synthesizer.fit(data_manager.norm_df)
-    # Save synthesizer
-    synthesizer.save(output_dir + model_name + '_synthesizer.pkl')
-    # Generate samples (generate same amount of data as generator)
-    synthetic_df = synthesizer.sample(num_rows=data_manager.model_data[0].shape[0])
-    # Save dataframe
-    synthetic_df.to_csv(output_dir + 'gen_data.csv', index=False)
 
 
 def eval(data_manager, synthetic_df, output_dir, args):
@@ -43,6 +42,20 @@ def eval(data_manager, synthetic_df, output_dir, args):
 
     # Save results
     save(results, output_dir + 'results.pkl')
+    return results
+
+
+def mmd_eval(data_manager, synthetic_df, output_dir):
+    real_df = data_manager.model_data[0]  # Use the same as the generator, even though sota models use the complete
+
+    # Denormalize
+    den_real_df = data_manager.transform_data(real_df, denorm=True)
+    den_synthetic_df = data_manager.transform_data(synthetic_df, denorm=True)
+    imp_synthetic_df = data_manager.impute_data(den_synthetic_df)
+    results = {'mmd': bootstrap_mmd(den_real_df, imp_synthetic_df)}
+
+    # Save results
+    save(results, output_dir + 'mmd_results.pkl')
     return results
 
 
@@ -66,7 +79,7 @@ def main():
 
             # Train model
             if args['train']:
-                train(data_manager, output_dir, model)
+                train(data_manager, output_dir, model, n_epochs=args['n_epochs'])
 
             # Evaluate real vs synthetic data
             if args['eval']:
@@ -75,6 +88,14 @@ def main():
 
                 # Evaluation
                 eval(data_manager, syn_df, output_dir, args)
+
+            # Compute MMD
+            if args['mmd']:
+                # Check if synthetic dataframe exists
+                syn_df = check_file(output_dir + 'gen_data.csv', 'Synthetic data not generated.', csv=True)
+
+                # Evaluation
+                mmd_eval(data_manager, syn_df, output_dir)
 
             # Show results
             results = check_file(output_dir + 'results.pkl', 'Results file does not exist.')
@@ -114,6 +135,12 @@ def main():
             # CTGAN/TVAE score representation
             print('\n----CTGAN/TVAE SCORE----')
             print('CTGAN score: ' + str(results['stats'].get_score()))
+
+            # MMD representation
+            if args['mmd']:
+                print('\n----MAXIMUM MEAN DISCREPANCY----')
+                mmd_results = check_file(output_dir + 'mmd_results.pkl', 'Results file does not exist.')
+                print('MMD: ' + str(mmd_results['mmd']))
 
 
 # Press the green button in the gutter to run the script.

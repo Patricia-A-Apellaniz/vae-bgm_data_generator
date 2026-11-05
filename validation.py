@@ -63,6 +63,97 @@ def ctgan_score_validation(real_df, synthetic_df, metadata):
 
 
 # ------------------------------------------------------------------------------------------------------
+#                                         MMD VALIDATION
+# ------------------------------------------------------------------------------------------------------
+def compute_kernel(x, y, kernel_type="rbf", sigma=None):
+    if kernel_type == "rbf":
+        if sigma is None:
+            pooled = torch.cat([x, y])
+            if len(pooled) > 2048:
+                indices = torch.linspace(0, len(pooled) - 1, 2048).long()
+                pooled = pooled[indices]
+            sigma = torch.median(torch.pdist(pooled)).clamp_min(torch.finfo(x.dtype).eps)
+        dist = torch.cdist(x, y, p=2)
+        return torch.exp(-(dist ** 2) / (2 * sigma ** 2))
+    else:
+        raise ValueError(f"Unsupported kernel type: {kernel_type}")
+
+
+def maximum_mean_discrepancy(real_df, synthetic_df, kernel_type='rbf', sigma=None):
+    """
+        Compute the Maximum Mean Discrepancy (MMD) between two sets of samples x and y.
+
+        Args:
+            real_df (DataFrame): The real dataset.
+            synthetic_df (DataFrame): The synthetic dataset.
+            kernel_type (str): The type of kernel to use. Currently, only 'rbf' (Radial Basis Function) is supported.
+            sigma (float, optional): The bandwidth parameter for the RBF kernel. If None, it will be estimated using the median heuristic.
+
+        Returns:
+            float: The biased estimate of squared MMD between x and y.
+        """
+
+    # Covert dtypes to float
+    real_df = real_df.astype('float64')
+    synthetic_df = synthetic_df.astype('float64')
+
+    # Convert real_df and synthetic_df to PyTorch tensors of shape (n_x/n_y, d), where n_x/n_y is the number of samples in x/y and d is the dimension.
+    x = torch.tensor(real_df.to_numpy())
+    y = torch.tensor(synthetic_df.to_numpy())
+    if len(x) == 0 or len(y) == 0 or x.shape[1] != y.shape[1]:
+        raise ValueError('MMD requires non-empty tables with matching feature counts')
+    if not torch.isfinite(x).all() or not torch.isfinite(y).all():
+        raise ValueError('MMD requires finite numeric values')
+    if sigma is None:
+        pooled = torch.cat([x, y])
+        if len(pooled) > 2048:
+            pooled = pooled[torch.linspace(0, len(pooled) - 1, 2048).long()]
+        sigma = torch.median(torch.pdist(pooled)).clamp_min(torch.finfo(x.dtype).eps)
+    if sigma <= 0:
+        raise ValueError('MMD bandwidth must be positive')
+
+    # Compute the MMD
+    def mean_kernel(left, right):
+        total = 0.0
+        for start in range(0, len(left), 512):
+            for end in range(0, len(right), 512):
+                total += compute_kernel(left[start:start + 512], right[end:end + 512],
+                                        kernel_type, sigma).sum().item()
+        return total / (len(left) * len(right))
+
+    # All three terms use the same bandwidth. This returns the biased MMD squared.
+    return mean_kernel(x, x) + mean_kernel(y, y) - 2 * mean_kernel(x, y)
+
+
+def bootstrap_mmd(real_df, synthetic_df, n_bootstrap=10, kernel_type='rbf', sigma=None, confidence_level=0.99):
+    """
+    Compute bootstrapped confidence interval for MMD.
+    """
+    mmd_values = []
+
+    real_np = real_df.to_numpy()
+    synthetic_np = synthetic_df.to_numpy()
+
+    n_real = len(real_np)
+    n_synth = len(synthetic_np)
+
+    for _ in range(n_bootstrap):
+        # Bootstrap resampling with replacement
+        real_sample = real_np[np.random.choice(n_real, n_real, replace=True)]
+        synth_sample = synthetic_np[np.random.choice(n_synth, n_synth, replace=True)]
+
+        # Compute MMD for bootstrap sample
+        mmd_values.append(
+            maximum_mean_discrepancy(pd.DataFrame(real_sample), pd.DataFrame(synth_sample), kernel_type, sigma))
+
+    # Compute confidence interval
+    lower = np.percentile(mmd_values, (1 - confidence_level) / 2 * 100)
+    upper = np.percentile(mmd_values, (1 + confidence_level) / 2 * 100)
+
+    return (lower, np.mean(mmd_values), upper)
+
+
+# ------------------------------------------------------------------------------------------------------
 #                                   DISCRIMINATIVE VALIDATION
 # ------------------------------------------------------------------------------------------------------
 def define_classifiers(disc_list):

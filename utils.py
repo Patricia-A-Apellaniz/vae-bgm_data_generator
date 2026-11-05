@@ -86,8 +86,9 @@ def run_args():
     args['input_dir'] = args['abs_path'] + 'datasets' + os.sep + 'raw_data' + os.sep
 
     # Training and testing configurations for savae and sota models
-    args['train'] = False
-    args['eval'] = False
+    args['train'] = True
+    args['eval'] = True
+    args['mmd'] = False
     args['early_stop'] = True
     args['batch_size'] = 500
     args['n_epochs'] = 1000
@@ -109,12 +110,12 @@ def run_args():
     args['cl_datasets'] = ['adult']
 
     # SOTA models
-    args['sota_output_dir'] = args['abs_path'] + 'data_generation' + os.sep + 'output_sota' + os.sep
+    args['sota_output_dir'] = args['abs_path'] + 'data_generation' + os.sep + 'output_sota_runs' + os.sep
     model_name = 'ctgan'
     args['models'] = ['ctgan'] if model_name == 'all' else [model_name]
 
     # VAE
     args['train_vae'] = True
-    args['output_dir'] = args['abs_path'] + 'data_generation' + os.sep + 'output_generator' + os.sep
+    args['output_dir'] = args['abs_path'] + 'data_generation' + os.sep + 'output_generator_runs' + os.sep
 
     return args

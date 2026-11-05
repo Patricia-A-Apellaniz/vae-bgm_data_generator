@@ -6,6 +6,7 @@
 # Packages to import
 import os
 import sys
+import numpy as np
 import torch
 
 from colorama import Fore, Style
@@ -16,7 +17,8 @@ parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
 sys.path.append(parent_dir)
 from data_generation.generator import Generator
 from utils import run_args, create_output_dir, check_file, save, preprocess_data
-from validation import discriminative_validation, ctgan_score_validation, utility_validation
+from validation import discriminative_validation, ctgan_score_validation, utility_validation, maximum_mean_discrepancy, \
+    bootstrap_mmd
 
 
 # Function to sort the list of tuples by its third item (mean acc)
@@ -111,7 +113,26 @@ def show_sdv_best_reports(results, best_rf_results, mode):
         print('Seed ' + str(seed[0]) + ': ' + str(format(seed[1], '.2f')))
 
 
+def show_mmd_best_results(results, best_rf_results, mode):
+    mmd_best_results = {'param_comb': best_rf_results['param_comb'], 'avg_mmd': 0.0, 'best_seeds_score': []}
+    print('Best hyperparameters: ' + str(mmd_best_results['param_comb']))
+    best_seeds = [seed[0] for seed in best_rf_results['best_seeds_acc']]
+    for seed in best_seeds:
+        res_seed = results[best_rf_results['param_comb']][seed]['mmd'][mode]
+        mmd_best_results['best_seeds_score'].append((seed, res_seed))
+
+    sum_metric = 0.0
+    for ele in mmd_best_results['best_seeds_score']:
+        sum_metric += ele[1][1]
+    mmd_best_results['avg_mmd'] = sum_metric / len(mmd_best_results['best_seeds_score'])
+    print('Average score from best seeds: ' + str(mmd_best_results['avg_mmd']))
+    for seed in mmd_best_results['best_seeds_score']:
+        print('Seed ' + str(seed[0]) + ': ' + str(format(seed[1][0], '.4f')) + ' - ' + str(format(seed[1][1], '.4f')) + ' - ' + str(format(seed[1][2], '.4f')))
+
+
 def train(data_manager, params, seed, output_dir, args):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
     # Model parameters
     data = data_manager.model_data
     latent_dim = params['latent_dim']
@@ -121,6 +142,8 @@ def train(data_manager, params, seed, output_dir, args):
                     'hidden_size': hidden_size,
                     'input_dim': data[0].shape[1],
                     'early_stop': args['early_stop']}
+    model_params.update({key: value for key, value in params.items()
+                         if key not in {'latent_dim', 'hidden_size'}})
     model_path = str(latent_dim) + '_' + str(hidden_size) + os.sep + 'seed_' + str(seed)
     log_name = output_dir + 'bgm' + os.sep + model_path + os.sep + 'model'
     model = Generator(model_params)
@@ -145,6 +168,8 @@ def train(data_manager, params, seed, output_dir, args):
         model.load_state_dict(torch.load(log_name))
 
     # Obtain and save reconstructed samples using TESTING data
+    np.random.seed(seed)
+    torch.manual_seed(seed)
     rec_info = model.predict(data[2])
 
     # Obtain and save synthetic samples using TESTING data
@@ -162,7 +187,7 @@ def train(data_manager, params, seed, output_dir, args):
         model.validate_samples_range(data_manager, n_gen, gauss=True)
 
         # Plot latent spaces
-        model.compare_latent_spaces(data[0], output_dir + 'gauss' + os.sep + model_path + os.sep)
+        model.compare_latent_spaces(data[0], output_dir + 'gauss' + os.sep + model_path + os.sep, data_manager.dataset_name)
         gauss_gen_data = data_manager.save_gauss_data_to_csv(output_dir, model_path, model.gauss_gen_info)
         return params, seed, rec_info, model.gen_info, gen_data, model.gauss_gen_info, gauss_gen_data
 
@@ -223,11 +248,62 @@ def eval_model(data_manager, args, output_dir, model='bgm'):
     save(results, output_dir + model + os.sep + 'results.pkl')
 
 
+def mmd_validation(data_manager, args, output_dir, model='bgm'):
+    def mmd_computation(data_manager, params, seed, model):
+        # Load already preprocessed data
+        p_name = str(params['latent_dim']) + '_' + str(params['hidden_size'])
+        imp_real_df = data_manager.model_data[0]
+        comp_gen_df = data_manager.gen_info[p_name][seed]['cov_samples'] if model == 'bgm' else \
+            data_manager.gauss_gen_info[p_name][seed]['cov_samples']
+
+        # Denormalize
+        imp_real_df = data_manager.transform_data(imp_real_df, denorm=True)
+        comp_gen_df = data_manager.transform_data(comp_gen_df, denorm=True)
+
+        validation = ['cov_comp']
+
+        # Dictionary to save results
+        results = {'mmd': {}, 'params': params, 'seed': seed}
+
+        # Validation process depending on data
+        for mode in validation:
+            if mode == 'cov_comp':
+                # results['mmd'][mode] = maximum_mean_discrepancy(imp_real_df, comp_gen_df)
+                results['mmd'][mode] = bootstrap_mmd(imp_real_df, comp_gen_df)
+
+            else:
+                raise ValueError('Validation mode not found')
+
+        return results
+
+    model_results = Parallel(n_jobs=args['n_threads'], verbose=10)(delayed(mmd_computation)(data_manager, params, seed, model) for params in args['param_comb'] for seed in range(args['n_seeds']))
+
+    # Create dictionary to save MMD results
+    results = {}
+    for params in args['param_comb']:
+        model_params = str(params['latent_dim']) + '_' + str(params['hidden_size'])
+        results[model_params] = {}
+        for seed in range(args['n_seeds']):
+            results[model_params][seed] = {}
+
+    for res in model_results:
+        params = res['params']
+        seed = res['seed']
+        model_params = str(params['latent_dim']) + '_' + str(params['hidden_size'])
+        results[model_params][seed]['mmd'] = res['mmd']
+
+    # Save results
+    save(results, output_dir + model + os.sep + 'mmd_results.pkl')
+
+
 def main():
     print('\n\n-------- SYNTHETIC DATA GENERATION - GENERATOR --------')
 
     # Environment configuration
     args = run_args()
+    combinations = [(params['latent_dim'], params['hidden_size']) for params in args['param_comb']]
+    if len(set(combinations)) != len(combinations):
+        raise ValueError('Use separate output directories for profiles with the same latent and hidden dimensions')
     task = 'generation'
     create_output_dir(task, args)
 
@@ -258,9 +334,14 @@ def main():
         # Evaluate generated data
         if args['eval']:
             eval_model(data_manager, args, output_dir)
-
             if args['gauss']:
                 eval_model(data_manager, args, output_dir, model='gauss')
+
+            # MMD evaluation
+            if args['mmd']:
+                mmd_validation(data_manager, args, output_dir)
+                if args['gauss']:
+                    mmd_validation(data_manager, args, output_dir, model='gauss')
 
         # Show results
         model_results = ['bgm', 'gauss'] if args['gauss'] else ['bgm']
@@ -301,8 +382,11 @@ def main():
                 print('\n----CTGAN/TVAE SCORE----')
                 show_sdv_best_reports(results, best_rf_results, mode)
 
-
-
+                # MMD representation
+                if args['mmd']:
+                    print('\n----MMD VALIDATION----')
+                    mmd_results = check_file(output_dir + model + os.sep + 'mmd_results.pkl', 'MMD results file does not exist.')
+                    show_mmd_best_results(mmd_results, best_rf_results, mode)
 
 
 # Press the green button in the gutter to run the script.
