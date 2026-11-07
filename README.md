@@ -53,11 +53,11 @@ files for Adult, METABRIC and STD.
 
 | Script | Saved results | Models |
 | --- | --- | --- |
-| `main_generator.py` | `results/manuscript/output_generator_manuscript/` | VAE-BGM and VAE-Gauss |
+| `main_generator.py` | `results/manuscript/output_generator/` | VAE-BGM and VAE-Gauss |
 | `main_sota.py` | `results/manuscript/output_sota/` | CTGAN |
 
 `SAVED_VAE_RESULTS` is the generator's report folder relative to the repository's
-`results/` directory. Its default value is `manuscript/output_generator_manuscript`.
+`results/` directory. Its default value is `manuscript/output_generator`.
 To view another saved run, keep the three flags disabled and set
 `SAVED_VAE_RESULTS` to that folder's path relative to `results/`. For example,
 use `output_generator_paper_full_runs` to read a saved run from

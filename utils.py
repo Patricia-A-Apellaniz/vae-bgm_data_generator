@@ -11,7 +11,7 @@ from datasets.ctgan_datasets import *
 from datasets.medical_datasets import *
 
 # Folder relative to results/ used by main_generator.py in report mode.
-SAVED_VAE_RESULTS = 'manuscript/output_generator_manuscript'
+SAVED_VAE_RESULTS = 'manuscript/output_generator'
 RUN_DECODER_FULL = False
 
 
