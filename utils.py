@@ -10,6 +10,10 @@ import pickle
 from datasets.ctgan_datasets import *
 from datasets.medical_datasets import *
 
+# Folder relative to results/ used by main_generator.py in report mode.
+SAVED_VAE_RESULTS = 'manuscript/output_generator_manuscript'
+RUN_DECODER_FULL = False
+
 
 # Check if file exists
 def check_file(path, msg, csv=False):
@@ -86,8 +90,8 @@ def run_args():
     args['input_dir'] = args['abs_path'] + 'datasets' + os.sep + 'raw_data' + os.sep
 
     # Training and testing configurations for savae and sota models
-    args['train'] = True
-    args['eval'] = True
+    args['train'] = False
+    args['eval'] = False
     args['mmd'] = False
     args['early_stop'] = True
     args['batch_size'] = 500
@@ -110,12 +114,24 @@ def run_args():
     args['cl_datasets'] = ['adult']
 
     # SOTA models
-    args['sota_output_dir'] = args['abs_path'] + 'data_generation' + os.sep + 'output_sota_runs' + os.sep
+    results_dir = os.path.join(args['abs_path'], 'results')
+    args['sota_output_dir'] = os.path.join(results_dir, 'output_sota_runs', '')
     model_name = 'ctgan'
     args['models'] = ['ctgan'] if model_name == 'all' else [model_name]
 
     # VAE
-    args['train_vae'] = True
-    args['output_dir'] = args['abs_path'] + 'data_generation' + os.sep + 'output_generator_runs' + os.sep
+    args['train_vae'] = args['train']
+    if RUN_DECODER_FULL:
+        args['param_comb'][0].update(training_profile='stable',
+                                     grad_clip_norm=5.0,
+                                     logvar_bounds=[-12.0, 4.0],
+                                     gaussian_std_mode='softplus',
+                                     dropout_p=0.0)
+    if args['train'] or args['eval']:
+        run_dir = 'output_generator_decoder_full_runs' if RUN_DECODER_FULL else 'output_generator_paper_full_runs'
+        args['output_dir'] = os.path.join(results_dir, run_dir, '')
+    else:
+        args['output_dir'] = os.path.join(results_dir, SAVED_VAE_RESULTS, '')
+        args['sota_output_dir'] = os.path.join(results_dir, 'manuscript', 'output_sota', '')
 
     return args

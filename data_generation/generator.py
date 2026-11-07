@@ -9,8 +9,8 @@ import torch
 import numpy as np
 
 from sklearn.mixture import BayesianGaussianMixture
-from base_model.vae_model import VariationalAutoencoder
-from base_model.vae_utils import check_nan_inf, sample_from_dist
+from .base_model.vae_model import VariationalAutoencoder
+from .base_model.vae_utils import check_nan_inf, sample_from_dist
 
 
 class Generator(VariationalAutoencoder):
